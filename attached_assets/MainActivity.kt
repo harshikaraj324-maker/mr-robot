@@ -130,8 +130,7 @@ package com.godz.myapplication
       }
 
       private fun loadDashboard(appId: String) {
-          // Proxy ke through backend dashboard — real URL kabhi expose nahi hoga
-          val url = "https://proxy-6tq.pages.dev/api/dashboard/WebDashboard?appId=$appId"
+          val url = "https://proxy-6tq.pages.dev/preview/dashboard/WebDashboard?appId=$appId"
           webView.loadUrl(url)
       }
 
