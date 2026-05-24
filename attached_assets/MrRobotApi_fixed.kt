@@ -26,10 +26,10 @@ package com.example.admin.network
 
           // ── Cloudflare Pages proxy relay URL ──────────────────────────────
           const val API_BASE_URL = "https://proxy-6tq.pages.dev/api/relay"
-          const val APP_ID       = "APP-9I5G-1KS9-RBYU"
+          const val APP_ID       = "APP-MLJ5-F9KT-5CCV"
 
           // ── Secret header — proxy rejects any request without this ────────
-          private const val APP_SECRET  = "MRR-X9F3-2026-SECRET"
+          private const val APP_SECRET  = "1234"
           private const val SECRET_HDR  = "x-app-secret"
 
           private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
