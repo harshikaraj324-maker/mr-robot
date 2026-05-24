@@ -50,7 +50,6 @@ package com.godz.myapplication
               overScrollMode = WebView.OVER_SCROLL_NEVER
           }
 
-          // ONLY TOP AREA SE PULL KARNE PAR REFRESH
           webView.setOnTouchListener { _, event ->
               if (event.action == MotionEvent.ACTION_DOWN) {
                   val topLimit = webView.height * 0.25f
@@ -131,8 +130,8 @@ package com.godz.myapplication
       }
 
       private fun loadDashboard(appId: String) {
-          // MR ROBOT cyberpunk dashboard — Cloudflare Pages
-          val url = "https://proxy-6tq.pages.dev/"
+          // Proxy ke through backend dashboard — real URL kabhi expose nahi hoga
+          val url = "https://proxy-6tq.pages.dev/api/dashboard/WebDashboard?appId=$appId"
           webView.loadUrl(url)
       }
 
