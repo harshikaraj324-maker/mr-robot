@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
-const STREAM_URL = "https://6077107f-a39e-40c6-b43b-7ae50c0ae048-00-30ffsrnvv20y1.pike.replit.dev/api/relay-stream";
-const TOGGLE_URL = "https://6077107f-a39e-40c6-b43b-7ae50c0ae048-00-30ffsrnvv20y1.pike.replit.dev/api/relay-toggle";
-const BASE_URL   = "https://6077107f-a39e-40c6-b43b-7ae50c0ae048-00-30ffsrnvv20y1.pike.replit.dev/api/relay";
+const STREAM_URL = "https://mr-robot-relay.s39452363.workers.dev/api/relay-stream";
+const TOGGLE_URL = "https://mr-robot-relay.s39452363.workers.dev/api/relay-toggle";
+const BASE_URL   = "https://mr-robot-relay.s39452363.workers.dev/api/relay";
 
 type Entry = {
   id: number; ts: string; method: string; path: string;
