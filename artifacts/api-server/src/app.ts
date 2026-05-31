@@ -1,4 +1,3 @@
-import "./lib/env";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -26,7 +25,25 @@ app.use(
     },
   }),
 );
-app.use(cors());
+const ALLOWED_ORIGINS = [
+  "https://mr-robot-dashboard.pages.dev",
+  /^https:\/\/[a-f0-9]+\.mr-robot-dashboard\.pages\.dev$/,
+  /^https:\/\/.*\.workers\.dev$/,
+  /^https:\/\/.*\.pages\.dev$/,
+  /^https?:\/\/localhost(:\d+)?$/,
+  /^https:\/\/.*\.replit\.dev$/,
+  /^https:\/\/.*\.repl\.co$/,
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    const ok = ALLOWED_ORIGINS.some(o =>
+      typeof o === "string" ? o === origin : o.test(origin)
+    );
+    cb(ok ? null : new Error("CORS: origin not allowed"), ok);
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
