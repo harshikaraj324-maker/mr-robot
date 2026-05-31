@@ -1,0 +1,46 @@
+name: Deploy MR ROBOT Proxy to CF Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/mockup-sandbox/src/components/mockups/proxy/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install and build
+        run: |
+          mkdir -p /tmp/proxy-build/src
+          cp artifacts/mockup-sandbox/src/components/mockups/proxy/ProxyStatus.tsx /tmp/proxy-build/src/
+          cd /tmp/proxy-build
+          cat > package.json << 'PKG'
+          {"name":"proxy-build","version":"1.0.0","type":"module","scripts":{"build":"vite build"},"devDependencies":{"@vitejs/plugin-react":"^4.3.4","react":"^18.3.1","react-dom":"^18.3.1","vite":"^6.0.7"}}
+          PKG
+          cat > index.html << 'HTML'
+          <!DOCTYPE html><html style="height:100%"><head><meta charset="UTF-8"/><title>MR ROBOT Proxy</title></head><body style="height:100%;margin:0"><div id="root" style="height:100%"></div><script type="module" src="/src/main.tsx"></script></body></html>
+          HTML
+          cat > src/main.tsx << 'MAIN'
+          import React from "react"; import { createRoot } from "react-dom/client"; import { ProxyStatus } from "./ProxyStatus"; createRoot(document.getElementById("root")!).render(<ProxyStatus />);
+          MAIN
+          cat > vite.config.ts << 'VITE'
+          import { defineConfig } from "vite"; import react from "@vitejs/plugin-react"; export default defineConfig({ plugins: [react()], build: { outDir: "dist" } });
+          VITE
+          cat > tsconfig.json << 'TS'
+          {"compilerOptions":{"target":"ES2020","lib":["ES2020","DOM","DOM.Iterable"],"module":"ESNext","skipLibCheck":true,"moduleResolution":"bundler","allowImportingTsExtensions":true,"isolatedModules":true,"moduleDetection":"force","noEmit":true,"jsx":"react-jsx","strict":false},"include":["src"]}
+          TS
+          npm install && npx vite build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: 5fcb894d018e54172f8018be09e62634
+          command: pages deploy /tmp/proxy-build/dist --project-name=mr-robot-proxy --branch=main
+
